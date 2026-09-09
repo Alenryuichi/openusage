@@ -236,6 +236,16 @@ extension ZAIAuthError: CategorizedError {
     }
 }
 
+extension ZcodeUsageError: CategorizedError {
+    var errorCategory: ErrorCategory {
+        switch self {
+        // No local footprint at all — Zcode was never run here, the expected "nothing to track" case.
+        case .notInstalled: .notLoggedIn
+        case .databaseUnreadable: .credentialAccess
+        }
+    }
+}
+
 extension ZAIUsageError: CategorizedError {
     var errorCategory: ErrorCategory {
         switch self {

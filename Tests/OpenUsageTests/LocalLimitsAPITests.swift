@@ -214,7 +214,10 @@ final class LocalLimitsAPITests: XCTestCase {
             "ollama": ["session", "weekly"],
             "opencode": ["session", "weekly", "monthly"],
             "openrouter": ["credits", "balance", "keyLimit"],
-            "zai": ["session", "weekly", "webSearches"]
+            "zai": ["session", "weekly", "webSearches"],
+            // Zcode has no account limits to export — it reports local token traffic through its
+            // usage history, so it contributes no limit resource keys.
+            "zcode": []
         ]
 
         XCTAssertEqual(actual, expected)

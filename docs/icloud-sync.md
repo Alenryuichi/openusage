@@ -7,7 +7,7 @@ existing file after app preferences are reset or the app is reinstalled. There i
 pairing code, or separate account.
 
 The file contains normalized daily tokens and spend, model totals, and unknown-model names for sources
-that are local to one Mac: Claude, Codex, Grok, and OpenCode. It also includes Claude account and
+that are local to one Mac: Claude, Codex, Grok, OpenCode, and Zcode. It also includes Claude account and
 organization identities when available, but never credentials, account limits, raw logs, or provider
 responses. Cursor's history is already account-wide, so it stays local and is never added across Macs.
 Disabling a provider immediately removes its peer contributions from the combined view and omits it from
