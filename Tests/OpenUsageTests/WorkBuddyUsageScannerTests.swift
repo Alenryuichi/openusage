@@ -104,53 +104,72 @@ final class WorkBuddyUsageScannerTests: XCTestCase {
     // MARK: - Aggregation
 
     func testPricesRequestsIntoLocalDaysAndSumsThem() throws {
-        let entries = try parsedEntries([
-            line(messageID: "today-1", timestampMs: epochMs("2026-07-12T11:00:00.000Z"),
-                 model: "glm-5.3", prompt: 1000, completion: 500),
-            line(messageID: "today-2", timestampMs: epochMs("2026-07-12T10:00:00.000Z"),
-                 model: "glm-5.3", prompt: 33_764, completion: 255, cacheHit: 128),
-            line(messageID: "yesterday", timestampMs: epochMs("2026-07-11T10:00:00.000Z"),
-                 model: "glm-5.3", prompt: 2000, completion: 1000)
-        ].joined(separator: "\n"))
+        // Both recent requests share one instant, so no time zone can split them across a local midnight —
+        // pinning hours is what makes this kind of test fail somewhere in the world. The older request is
+        // a full day earlier, which is a different local day in every zone. Assertions read the same local
+        // calendar the scanner uses rather than hardcoding a date.
+        let recent = try XCTUnwrap(parsedEntries(line(
+            messageID: "recent-1", timestampMs: epochMs("2026-07-12T12:00:00.000Z"),
+            model: "glm-5.3", prompt: 1000, completion: 500
+        )).first)
+        let recentSecond = try XCTUnwrap(parsedEntries(line(
+            messageID: "recent-2", timestampMs: epochMs("2026-07-12T12:00:00.000Z"),
+            model: "glm-5.3", prompt: 33_764, completion: 255, cacheHit: 128
+        )).first)
+        let older = try XCTUnwrap(parsedEntries(line(
+            messageID: "older", timestampMs: epochMs("2026-07-11T12:00:00.000Z"),
+            model: "glm-5.3", prompt: 2000, completion: 1000
+        )).first)
 
-        let scan = WorkBuddyUsageScanner.aggregate(entries: entries, since: since, pricing: pricing)
-        let today = try XCTUnwrap(scan.series.daily.first { $0.date == "2026-07-12" })
-        let yesterday = try XCTUnwrap(scan.series.daily.first { $0.date == "2026-07-11" })
+        let scan = WorkBuddyUsageScanner.aggregate(entries: [recent, recentSecond, older], since: since, pricing: pricing)
+        let recentDay = try XCTUnwrap(scan.series.daily.first { $0.date == DailyUsageAccumulator.dayKey(from: recent.timestamp) })
+        let olderDay = try XCTUnwrap(scan.series.daily.first { $0.date == DailyUsageAccumulator.dayKey(from: older.timestamp) })
 
-        // Today: (1000 in + 500 out) and (33,636 in + 128 cache read + 255 out) at the rates above.
-        let expectedToday = 0.001 + 0.002 + 0.033_636 + 0.000_032 + 0.001_020
-        XCTAssertEqual(today.costUSD ?? 0, expectedToday, accuracy: 1e-9)
-        XCTAssertEqual(today.totalTokens, 1500 + 34_019)
-        XCTAssertEqual(yesterday.totalTokens, 3000)
-        XCTAssertEqual(yesterday.costUSD ?? 0, 0.002 + 0.004, accuracy: 1e-9)
+        // Recent: (1000 in + 500 out) and (33,636 in + 128 cache read + 255 out) at the rates above.
+        let expectedRecent = 0.001 + 0.002 + 0.033_636 + 0.000_032 + 0.001_020
+        XCTAssertEqual(recentDay.costUSD ?? 0, expectedRecent, accuracy: 1e-9)
+        XCTAssertEqual(recentDay.totalTokens, 1500 + 34_019)
+        XCTAssertEqual(olderDay.totalTokens, 3000)
+        XCTAssertEqual(olderDay.costUSD ?? 0, 0.002 + 0.004, accuracy: 1e-9)
     }
 
     func testUnpricedModelIsExcludedAndFlaggedInsteadOfPricedAtZero() throws {
-        let entries = try parsedEntries([
-            line(messageID: "known", timestampMs: epochMs("2026-07-12T10:00:00.000Z"),
-                 model: "glm-5.3", prompt: 1000, completion: 500),
-            line(messageID: "unknown", timestampMs: epochMs("2026-07-12T10:30:00.000Z"),
-                 model: "hy4-preview", prompt: 900_000, completion: 1000)
-        ].joined(separator: "\n"))
+        let known = try XCTUnwrap(parsedEntries(line(
+            messageID: "known", timestampMs: epochMs("2026-07-12T12:00:00.000Z"),
+            model: "glm-5.3", prompt: 1000, completion: 500
+        )).first)
+        let unknown = try XCTUnwrap(parsedEntries(line(
+            messageID: "unknown", timestampMs: epochMs("2026-07-12T12:00:00.000Z"),
+            model: "hy4-preview", prompt: 900_000, completion: 1000
+        )).first)
 
-        let scan = WorkBuddyUsageScanner.aggregate(entries: entries, since: since, pricing: pricing)
-        let today = try XCTUnwrap(scan.series.daily.first)
+        let scan = WorkBuddyUsageScanner.aggregate(entries: [known, unknown], since: since, pricing: pricing)
+        let day = try XCTUnwrap(scan.series.daily.first)
 
-        XCTAssertEqual(today.totalTokens, 1500)
-        XCTAssertEqual(today.costUSD ?? 0, 0.003, accuracy: 1e-9)
-        XCTAssertEqual(scan.unknownModelsByDay["2026-07-12"], ["hy4-preview"])
+        XCTAssertEqual(day.totalTokens, 1500)
+        XCTAssertEqual(day.costUSD ?? 0, 0.003, accuracy: 1e-9)
+        XCTAssertEqual(
+            scan.unknownModelsByDay[DailyUsageAccumulator.dayKey(from: known.timestamp)],
+            ["hy4-preview"]
+        )
     }
 
     func testRequestsBeforeTheWindowAreDropped() throws {
-        let entries = try parsedEntries([
-            line(messageID: "old", timestampMs: epochMs("2026-05-01T10:00:00.000Z"),
-                 model: "glm-5.3", prompt: 1000, completion: 500),
-            line(messageID: "current", timestampMs: epochMs("2026-07-12T10:00:00.000Z"),
-                 model: "glm-5.3", prompt: 100, completion: 10)
-        ].joined(separator: "\n"))
+        // The cutoff is derived from the fixture rather than hardcoded, so the window's behaviour is what
+        // is asserted — not the time zone the test happens to run in.
+        let recent = try XCTUnwrap(parsedEntries(line(
+            messageID: "recent", timestampMs: epochMs("2026-07-12T14:00:00.000Z"),
+            model: "glm-5.3", prompt: 100, completion: 10
+        )).first)
+        let old = try XCTUnwrap(parsedEntries(line(
+            messageID: "old", timestampMs: epochMs("2026-05-01T14:00:00.000Z"),
+            model: "glm-5.3", prompt: 1000, completion: 500
+        )).first)
+        let cutoff = recent.timestamp.addingTimeInterval(-36 * 3600)
 
-        let scan = WorkBuddyUsageScanner.aggregate(entries: entries, since: since, pricing: pricing)
-        XCTAssertEqual(scan.series.daily.map(\.date), ["2026-07-12"])
+        let scan = WorkBuddyUsageScanner.aggregate(entries: [recent, old], since: cutoff, pricing: pricing)
+
+        XCTAssertEqual(scan.series.daily.map(\.date), [DailyUsageAccumulator.dayKey(from: recent.timestamp)])
     }
 
     // MARK: - End-to-end scan over a temporary home

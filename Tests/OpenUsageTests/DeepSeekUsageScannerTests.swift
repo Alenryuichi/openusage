@@ -259,20 +259,27 @@ final class DeepSeekUsageScannerTests: XCTestCase {
     }
 
     func testPricingFollowsEachRequestsOwnTimestamp() throws {
-        // Two identical requests: one inside the peak window, one outside it. Same tokens, 2× the cost.
-        let peak = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
-            type: "assistant/message", ms: epochMs("2026-07-13T03:00:00Z"),
-            id: "peak", model: "deepseek-flash", input: 1_000_000, cacheRead: 0, output: 0
+        // Two identical requests that must bucket into one local day and each pay the off-peak rate. The
+        // tier rule itself is covered by `DeepSeekPricingTests`; what this pins is that per-request pricing
+        // adds up rather than being applied once per day.
+        //
+        // Both carry the *same* instant, so no time zone can split them across a local midnight — pinning
+        // hours is exactly what makes this kind of test pass in one zone and fail in another. 12:30Z is
+        // 20:00–22:00 UTC on Monday 2026-07-13, outside both peak windows in every zone.
+        let first = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
+            type: "assistant/message", ms: epochMs("2026-07-13T12:30:00Z"),
+            id: "first", model: "deepseek-flash", input: 1_000_000, cacheRead: 0, output: 0
         )))
-        let offPeak = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
-            type: "assistant/message", ms: epochMs("2026-07-13T15:00:00Z"),
-            id: "offpeak", model: "deepseek-flash", input: 1_000_000, cacheRead: 0, output: 0
+        let second = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
+            type: "assistant/message", ms: epochMs("2026-07-13T12:30:00Z"),
+            id: "second", model: "deepseek-flash", input: 1_000_000, cacheRead: 0, output: 0
         )))
 
-        let scan = DeepSeekUsageScanner.aggregate(entries: [peak, offPeak], since: since)
-        let day = try XCTUnwrap(scan.series.daily.first { $0.date == "2026-07-13" })
+        let scan = DeepSeekUsageScanner.aggregate(entries: [first, second], since: since)
+        let day = try XCTUnwrap(scan.series.daily.first)
 
-        XCTAssertEqual(day.costUSD ?? 0, 0.30 + 0.15, accuracy: 1e-9)
+        XCTAssertEqual(day.date, DailyUsageAccumulator.dayKey(from: first.timestamp))
+        XCTAssertEqual(day.costUSD ?? 0, 2 * 0.15, accuracy: 1e-9)
         XCTAssertEqual(day.totalTokens, 2_000_000)
     }
 
@@ -290,21 +297,28 @@ final class DeepSeekUsageScannerTests: XCTestCase {
         let day = try XCTUnwrap(scan.series.daily.first)
 
         XCTAssertEqual(day.totalTokens, 1_000_000)
-        XCTAssertEqual(scan.unknownModelsByDay["2026-07-13"], ["deepseek-something-new"])
+        XCTAssertEqual(
+            scan.unknownModelsByDay[DailyUsageAccumulator.dayKey(from: known.timestamp)],
+            ["deepseek-something-new"]
+        )
     }
 
     func testRequestsBeforeTheWindowAreDropped() throws {
+        // The cutoff is derived from the fixture itself rather than hardcoded, so the assertions hold in
+        // any time zone: the window covers the recent request and not the older one.
+        let recent = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
+            type: "assistant/message", ms: epochMs("2026-07-12T12:00:00Z"),
+            id: "recent", model: "deepseek-flash", input: 100, cacheRead: 0, output: 0
+        )))
         let old = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
-            type: "assistant/message", ms: epochMs("2026-05-01T10:00:00Z"),
+            type: "assistant/message", ms: epochMs("2026-05-01T12:00:00Z"),
             id: "old", model: "deepseek-flash", input: 100, cacheRead: 0, output: 0
         )))
-        let current = try XCTUnwrap(DeepSeekUsageScanner.parse(line(
-            type: "assistant/message", ms: epochMs("2026-07-12T10:00:00Z"),
-            id: "current", model: "deepseek-flash", input: 100, cacheRead: 0, output: 0
-        )))
+        let cutoff = recent.timestamp.addingTimeInterval(-36 * 3600)
 
-        let scan = DeepSeekUsageScanner.aggregate(entries: [old, current], since: since)
-        XCTAssertEqual(scan.series.daily.map(\.date), ["2026-07-12"])
+        let scan = DeepSeekUsageScanner.aggregate(entries: [old, recent], since: cutoff)
+
+        XCTAssertEqual(scan.series.daily.map(\.date), [DailyUsageAccumulator.dayKey(from: recent.timestamp)])
     }
 
     func testScanReadsATemporaryDSHHomeAndDedupesReplayedRequests() async throws {

@@ -5,7 +5,20 @@ import XCTest
 /// and trend, and the two failure paths (no WorkBuddy footprint, unreadable logs).
 @MainActor
 final class WorkBuddyProviderTests: XCTestCase {
-    private let now = OpenUsageISO8601.date(from: "2026-07-12T12:00:00.000Z")!
+    /// The provider clock, pinned to **local** noon on a fixed date.
+    ///
+    /// A fixed UTC instant cannot pin "today": the spend tiles bucket by the local calendar day, so any
+    /// hour is midnight somewhere and these tests then read "Yesterday" (11:00Z is 23:00 the same day in
+    /// UTC but 00:00 the next day at UTC+13). Local noon is safely inside the day in every zone, and
+    /// fixtures expressed as offsets from it (see `msFromNow`) land on the intended local days everywhere.
+    private var now: Date {
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 7
+        components.day = 12
+        components.hour = 12
+        return Calendar.current.date(from: components)!
+    }
 
     private let pricing = ModelPricing(
         supplement: PricingSupplement(),
@@ -37,8 +50,8 @@ final class WorkBuddyProviderTests: XCTestCase {
     func testDetectsUsageAndBacksTheSpendTilesAndTrend() async throws {
         let home = try WorkBuddyLogFixture.makeHome(files: [
             "workspace/session.jsonl": [
-                workbuddyLine(messageID: "today", timestampMs: epochMs("2026-07-12T11:00:00Z"), prompt: 1000, completion: 500),
-                workbuddyLine(messageID: "yesterday", timestampMs: epochMs("2026-07-11T11:00:00Z"), prompt: 2000, completion: 1000)
+                workbuddyLine(messageID: "today", timestampMs: msFromNow(hoursAgo: 1), prompt: 1000, completion: 500),
+                workbuddyLine(messageID: "yesterday", timestampMs: msFromNow(hoursAgo: 25), prompt: 2000, completion: 1000)
             ].joined(separator: "\n")
         ])
         let provider = provider(logFiles: { _ in WorkBuddyPaths.logFiles(in: home.path) })
@@ -54,7 +67,7 @@ final class WorkBuddyProviderTests: XCTestCase {
     func testSpendTilesFlagEstimatedDollarsButMeasuredTokens() async throws {
         let home = try WorkBuddyLogFixture.makeHome(files: [
             "workspace/session.jsonl": workbuddyLine(
-                messageID: "today", timestampMs: epochMs("2026-07-12T11:00:00Z"), prompt: 1000, completion: 500
+                messageID: "today", timestampMs: msFromNow(hoursAgo: 1), prompt: 1000, completion: 500
             )
         ])
         let provider = provider(logFiles: { _ in WorkBuddyPaths.logFiles(in: home.path) })
@@ -116,11 +129,11 @@ final class WorkBuddyProviderTests: XCTestCase {
         let home = try WorkBuddyLogFixture.makeHome(files: [
             "workspace/session.jsonl": [
                 workbuddyLine(
-                    messageID: "priced", timestampMs: epochMs("2026-07-12T11:00:00Z"),
+                    messageID: "priced", timestampMs: msFromNow(hoursAgo: 1),
                     prompt: 1000, completion: 500
                 ),
                 workbuddyLine(
-                    messageID: "unpriced", timestampMs: epochMs("2026-07-12T11:30:00Z"),
+                    messageID: "unpriced", timestampMs: msFromNow(hoursAgo: 1),
                     prompt: 900_000, completion: 1000, model: "hy4-preview"
                 )
             ].joined(separator: "\n")
@@ -141,8 +154,14 @@ final class WorkBuddyProviderTests: XCTestCase {
         XCTAssertEqual(values[1].number, 1500)
     }
 
-    private func epochMs(_ iso: String) -> Double {
-        OpenUsageISO8601.date(from: iso)!.timeIntervalSince1970 * 1000
+    /// A fixture instant expressed as an offset from the provider's clock.
+    ///
+    /// Offsets are whole days or whole hours *before* `now`, never absolute UTC hours: the spend tiles
+    /// bucket by the local calendar day, so a fixed hour that reads as "today" in UTC can already be
+    /// tomorrow — or yesterday — elsewhere (11:00Z is 23:00 the same day in UTC, but 00:00 the next day in
+    /// UTC+13), which made these tests pass only in the west.
+    private func msFromNow(hoursAgo: Double) -> Double {
+        (now.timeIntervalSince1970 - hoursAgo * 3600) * 1000
     }
 
     private func workbuddyLine(
