@@ -16,11 +16,12 @@ chat, models, and balance, nothing else — so the balance is all its API can an
 | Today / Yesterday / Last 30 Days | Tokens this Mac sent through DSH and their estimated cost (`$0.42 · 3.1M tokens`) |
 | Usage Trend | A day-by-day sparkline of tokens over the last month |
 
-The breakdown row only appears when the account holds both kinds of credit. A balance is a held amount, so
-a real zero shows as `$0.00 left` rather than "No data" — the same treatment OpenRouter's balance gets.
-DeepSeek bills CNY accounts in yuan, so those balances carry a `¥` mark (`¥70.65`) instead of a dollar
-sign. The provider header reads **Active**, or **Balance exhausted** when the account can no longer call
-the API.
+The breakdown row reports both halves of the balance — granted credit first, then topped-up — and shows a
+real `¥0.00` for whichever half the account doesn't hold, rather than disappearing. A topped-up-only
+account therefore reads `¥0.00 · ¥63.58`, not an empty row. A balance is a held amount, so a real zero
+shows as `$0.00 left` rather than "No data" — the same treatment OpenRouter's balance gets. DeepSeek bills
+CNY accounts in yuan, so those balances carry a `¥` mark (`¥70.65`) instead of a dollar sign. The provider
+header reads **Active**, or **Balance exhausted** when the account can no longer call the API.
 
 Days are grouped in your Mac's local time zone, and a period with no recorded usage reads **No data**
 rather than a misleading `$0.00 · 0 tokens`.

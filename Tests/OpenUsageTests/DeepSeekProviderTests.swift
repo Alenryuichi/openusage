@@ -86,13 +86,48 @@ final class DeepSeekUsageMapperTests: XCTestCase {
         """#)))
 
         let lines = DeepSeekUsageMapper.lines(for: payload.balances[0])
-        // A topped-up-only account reports its whole balance in the total row — no split row.
-        XCTAssertEqual(lines.map(\.label), ["Total Balance"])
+        XCTAssertEqual(lines.map(\.label), ["Total Balance", "Balance Breakdown"])
 
         guard case .values(_, let values, _, _, _, _) = lines[0] else { return XCTFail("expected a values row") }
         XCTAssertEqual(values.map(\.kind), [.dollars])
         XCTAssertEqual(values[0].number, 12.34, accuracy: 1e-9)
         XCTAssertEqual(MetricFormatter.string(for: values[0], style: .row), "$12.34")
+        // USD keeps the app's bare dollar rendering: no unit label.
+        XCTAssertNil(values[0].label)
+    }
+
+    /// The shape most accounts are in, and the one the default layout exposes: a topped-up-only balance
+    /// (no granted credit yet). The split must still carry both halves — a skipped line renders as
+    /// "No data" on a tile that is on by default, which reads as broken rather than as "no granted
+    /// credit". Regression: this row used to be omitted unless *both* halves were positive.
+    func testToppedUpOnlyBalanceStillReportsBothHalves() throws {
+        let payload = try XCTUnwrap(DeepSeekUsageMapper.balances(from: data(#"""
+        {"is_available":true,"balance_infos":[
+          {"currency":"CNY","total_balance":"63.58","granted_balance":"0.00","topped_up_balance":"63.58"}
+        ]}
+        """#)))
+
+        let lines = DeepSeekUsageMapper.lines(for: payload.balances[0])
+        XCTAssertEqual(lines.map(\.label), ["Total Balance", "Balance Breakdown"])
+
+        guard case .values(_, let split, _, _, _, _) = lines[1] else { return XCTFail("expected a values row") }
+        XCTAssertEqual(split.map(\.number), [0, 63.58])
+        // The yuan mark carries the currency, so no unit word is needed on either half.
+        XCTAssertEqual(split.map(\.label), [nil, nil])
+        XCTAssertEqual(MetricFormatter.string(for: split[0], style: .row), "¥0.00")
+        XCTAssertEqual(MetricFormatter.string(for: split[1], style: .row), "¥63.58")
+    }
+
+    func testGrantedOnlyBalanceStillReportsBothHalves() throws {
+        let payload = try XCTUnwrap(DeepSeekUsageMapper.balances(from: data(#"""
+        {"is_available":true,"balance_infos":[
+          {"currency":"USD","total_balance":"5.00","granted_balance":"5.00","topped_up_balance":"0.00"}
+        ]}
+        """#)))
+
+        let lines = DeepSeekUsageMapper.lines(for: payload.balances[0])
+        guard case .values(_, let split, _, _, _, _) = lines[1] else { return XCTFail("expected a values row") }
+        XCTAssertEqual(split.map(\.number), [5.0, 0])
     }
 
     func testNonUSDCurrencyKeepsCentsWithoutReadingAsDollars() throws {

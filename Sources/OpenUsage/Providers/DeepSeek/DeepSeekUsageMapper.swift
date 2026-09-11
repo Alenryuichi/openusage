@@ -51,30 +51,31 @@ enum DeepSeekUsageMapper {
     /// Total Balance + Balance Breakdown rows for the account's primary currency.
     ///
     /// A balance is a *held amount*, so a real zero is shown ("$0.00 left") rather than "No data" — the
-    /// same treatment OpenRouter's balance gets. USD prints through the app's plain dollar formatting;
-    /// any other currency (DeepSeek bills CNY accounts in yuan) carries its own mark, so the figure keeps
-    /// cents without ever reading as dollars.
+    /// same treatment OpenRouter's balance gets. That applies to the breakdown's two halves as well: a
+    /// topped-up-only account (no granted credit yet) must read `¥0.00 · ¥63.58`, not a row with nothing
+    /// behind it. Both halves are always emitted, because the row is on by default and a skipped line
+    /// renders as "No data" forever, which reads as a broken tile rather than as "you hold no granted
+    /// credit".
+    ///
+    /// USD prints through the app's plain dollar formatting; any other currency (DeepSeek bills CNY
+    /// accounts in yuan) carries its own mark, so the figure keeps cents without ever reading as dollars.
     static func lines(for balance: Balance) -> [MetricLine] {
-        var lines: [MetricLine] = [
-            .values(label: "Total Balance", values: [value(balance.total, in: balance)])
-        ]
-
-        // Only report the split when the account actually has both kinds of credit: a granted-only or
-        // topped-up-only account reads its whole balance in the total row already.
-        if balance.granted > 0, balance.toppedUp > 0 {
-            lines.append(.values(label: "Balance Breakdown", values: [
+        [
+            .values(label: "Total Balance", values: [value(balance.total, in: balance)]),
+            .values(label: "Balance Breakdown", values: [
                 value(balance.granted, in: balance),
                 value(balance.toppedUp, in: balance)
-            ]))
-        }
-        return lines
+            ])
+        ]
     }
 
     private static func value(_ amount: Double, in balance: Balance) -> MetricValue {
         MetricValue(
             number: amount,
             kind: .dollars,
-            // `nil` for USD keeps the app's default `$`; only a foreign currency needs naming.
+            // `nil` for USD keeps the app's default `$`; only a foreign currency needs naming, and its
+            // mark alone carries that (`¥70.65`) — a "CNY" unit word on every row would only make the
+            // balance read "¥70.65 CNY left".
             currencySymbol: balance.isUSD ? nil : balance.symbol
         )
     }
