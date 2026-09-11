@@ -210,13 +210,16 @@ final class LocalLimitsAPITests: XCTestCase {
             "antigravity": ["geminiSession", "geminiWeekly", "nonGeminiSession", "nonGeminiWeekly"],
             "copilot": ["premiumCredits", "extraUsage", "orgCredits", "orgSpend", "chat", "completions"],
             "devin": ["daily", "weekly", "extraUsageBalance"],
+            // DeepSeek's only account state is the prepaid balance it can read.
+            "deepseek": ["balance"],
             "grok": ["weekly"],
             "ollama": ["session", "weekly"],
             "opencode": ["session", "weekly", "monthly"],
             "openrouter": ["credits", "balance", "keyLimit"],
             "zai": ["session", "weekly", "webSearches"],
-            // Zcode has no account limits to export — it reports local token traffic through its
-            // usage history, so it contributes no limit resource keys.
+            // WorkBuddy and Zcode have no account limits to export — they report local token traffic
+            // through their usage history, so they contribute no limit resource keys.
+            "workbuddy": [],
             "zcode": []
         ]
 

@@ -22,6 +22,9 @@ enum DefaultLayout {
         "copilot.premium", "copilot.extra", "copilot.orgCredits", "copilot.orgSpend",
         "copilot.chat", "copilot.completions",
 
+        "deepseek.balance", "deepseek.breakdown", "deepseek.trend",
+        "deepseek.today", "deepseek.yesterday", "deepseek.last30",
+
         "devin.daily", "devin.weekly", "devin.extra",
 
         "grok.weekly", "grok.trend",
@@ -34,6 +37,9 @@ enum DefaultLayout {
 
         "openrouter.credits", "openrouter.balance",
         "openrouter.today", "openrouter.week", "openrouter.month", "openrouter.keyLimit",
+
+        "workbuddy.trend",
+        "workbuddy.today", "workbuddy.yesterday", "workbuddy.last30",
 
         "zai.session", "zai.weekly", "zai.webSearches",
 
@@ -99,6 +105,10 @@ enum DefaultLayout {
         // (suppressed), so they read "No data" there.
         "copilot.orgCredits", "copilot.orgSpend", "copilot.chat", "copilot.completions",
         "devin.extra",
+        // DeepSeek: the Total Balance wallet row stays above the fold; the granted/topped-up split and the
+        // local DSH spend rows sit below the caret.
+        "deepseek.breakdown",
+        "deepseek.today", "deepseek.yesterday", "deepseek.last30",
         "grok.payAsYouGo", "grok.today", "grok.yesterday", "grok.last30",
         // Ollama: the Session and Weekly meters stay above the fold; the rolling four-week spend total
         // (always $0.00 on a subscription, real only for pay-as-you-go) sits below the caret.
@@ -111,6 +121,9 @@ enum DefaultLayout {
         "openrouter.today", "openrouter.week", "openrouter.month", "openrouter.keyLimit",
         // Z.ai: Session meter stays above the fold; Web Searches (monthly count) sits below the caret.
         "zai.webSearches",
+        // WorkBuddy: Usage Trend stays above the fold — matching every other local-traffic provider —
+        // with the spend tiles (Today/Yesterday/Last 30 Days) below the caret.
+        "workbuddy.today", "workbuddy.yesterday", "workbuddy.last30",
         // Zcode: Usage Trend stays above the fold — matching every other local-traffic provider —
         // with the spend tiles (Today/Yesterday/Last 30 Days) below the caret.
         "zcode.today", "zcode.yesterday", "zcode.last30"

@@ -1,6 +1,6 @@
 {
   "$comment": "OpenUsage pricing supplement. Prices Cursor-native models that no public catalog carries, supplies fast-variant multipliers the catalogs omit, and maps provider log/CSV model slugs to canonical pricing keys (LiteLLM keys, models.dev ids, or entries in this file). Cursor Router rows name the routed model in prose instead of a slug ('Opus 5 (Auto Balanced)'), so those labels get alias rules too. Published to gh-pages by .github/workflows/pricing-supplement.yml on every change, so installed apps pick edits up within about an hour - no release needed. Rates are USD per million tokens. Sources: https://cursor.com/docs/models-and-pricing.md for Cursor-native entries; https://platform.claude.com/docs/en/about-claude/pricing for Claude Fable 5.1; https://developers.openai.com/api/docs/models/daybreak-blue-latest and https://developers.openai.com/api/docs/pricing for Daybreak aliases and rates; https://docs.z.ai/guides/overview/pricing for GLM 5.3.",
-  "updated_at": "2026-09-04T11:08:53Z",
+  "updated_at": "2026-09-11T05:58:55Z",
   "pricing": {
     "auto": {
       "input_per_million": 1.25,
@@ -192,6 +192,13 @@
       "cache_write_per_million": 0.75,
       "cache_read_per_million": 0.075,
       "output_per_million": 3.75
+    },
+    "hy3": {
+      "$comment": "Tencent Hunyuan 3, which WorkBuddy logs as `hy3`. models.dev carries a bare `hy3` key with all-zero rates that would otherwise win the exact match and price every request as free; these are the rates models.dev's own `tencent/hy3` entry carries. Cache writes are unpublished, so they bill at input.",
+      "input_per_million": 0.16,
+      "cache_write_per_million": 0.16,
+      "cache_read_per_million": 0.04,
+      "output_per_million": 0.64
     }
   },
   "fast_multipliers": {
@@ -335,7 +342,9 @@
     { "pattern": "(?i)^Gemini 3\\.8 Flash(?: \\([^)]*\\))?$", "canonical": "gemini-3.8-flash" },
     { "pattern": "(?i)^GLM 5\\.2 \\(Auto[^)]*\\)$", "canonical": "glm-5.2" },
     { "pattern": "(?i)^GLM 5\\.3 \\(Auto[^)]*\\)$", "canonical": "glm-5.3" },
-    { "pattern": "(?i)^Kimi K3 \\(Auto[^)]*\\)$", "canonical": "kimi-k3" }
+    { "pattern": "(?i)^Kimi K3 \\(Auto[^)]*\\)$", "canonical": "kimi-k3" },
+    { "pattern": "^deepseek-v4-flash-version$", "canonical": "deepseek-v4-flash" },
+    { "pattern": "^kimi-k3-1$", "canonical": "kimi-k3" }
   ],
   "fallback_models": {
     "codex": [

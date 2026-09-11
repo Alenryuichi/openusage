@@ -25,10 +25,17 @@ struct DailyUsageAccumulator {
         return String(format: "%04d-%02d-%02d", components.year ?? 0, components.month ?? 0, components.day ?? 0)
     }
 
-    /// Add a priced row's tokens + cost, attributed to `model` on `day`.
-    mutating func add(day: String, tokens: Int, cost: Double, model: String, fallbackPricingModel: String? = nil) {
+    /// Add a row's tokens and, when it has one, its cost, attributed to `model` on `day`.
+    ///
+    /// `cost` is optional so a source that measures tokens without pricing them can say so: passing `nil`
+    /// keeps the day *unpriced*, which renders as a token-only tile ("1.2M tokens"). Passing `0` keeps
+    /// the day priced at a real zero (a $0.00 spend is a measurement, not a missing one), so a source
+    /// whose rates are genuinely free must pass `0` rather than `nil`.
+    mutating func add(day: String, tokens: Int, cost: Double?, model: String, fallbackPricingModel: String? = nil) {
         tokensByDay[day, default: 0] += tokens
-        costByDay[day, default: 0] += cost
+        if let cost {
+            costByDay[day, default: 0] += cost
+        }
         modelsByDay[day, default: [:]][model, default: ModelAccumulator()].add(tokens: tokens, costUSD: cost)
         if let fallbackPricingModel { fallbackPricingModelsByDay[day, default: []].insert(fallbackPricingModel) }
     }
@@ -70,10 +77,11 @@ struct DailyUsageAccumulator {
     }
 
     /// Assemble the scan: per-day tokens/cost (days sorted newest-first), the per-day model breakdown,
-    /// and the unknown-model set. Every counted day is priced, so its `costUSD` is always the real total.
+    /// and the unknown-model set. A day is priced only when at least one of its rows carried a cost —
+    /// otherwise its `costUSD` stays `nil`, and the spend tiles render it as tokens alone.
     func build() -> LogUsageScan {
         let days = tokensByDay.keys.sorted(by: >).map { day in
-            DailyUsageEntry(date: day, totalTokens: tokensByDay[day] ?? 0, costUSD: costByDay[day] ?? 0)
+            DailyUsageEntry(date: day, totalTokens: tokensByDay[day] ?? 0, costUSD: costByDay[day])
         }
         let modelUsage = ModelUsageSeries(daily: modelsByDay.keys.sorted(by: >).map { day in
             DailyModelUsageEntry(

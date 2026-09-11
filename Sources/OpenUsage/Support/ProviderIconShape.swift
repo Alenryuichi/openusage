@@ -99,10 +99,12 @@ enum ProviderMarks {
         case "claude": return "sparkle"
         case "codex": return "circle.hexagongrid"
         case "cursor": return "cube"
+        case "deepseek": return "brain"
         case "grok": return "bolt.fill"
         case "ollama": return "cloud"
         case "opencode": return "chevron.left.forwardslash.chevron.right"
         case "openrouter": return "point.3.connected.trianglepath.dotted"
+        case "workbuddy": return "briefcase"
         case "zai": return "z.signal"
         default: return "app.dashed"
         }
