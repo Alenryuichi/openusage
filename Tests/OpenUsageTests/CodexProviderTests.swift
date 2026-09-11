@@ -542,10 +542,18 @@ final class CodexProviderTests: XCTestCase {
     func testOpenCodeCodexOAuthUsageIsMergedIntoCodexHistory() async throws {
         // A far-future fixture keeps PiUsageScanner.shared from folding the developer's real local pi
         // history into this integration test.
-        let now = OpenUsageISO8601.date(from: "2099-02-20T16:00:00.000Z")!
-        let milliseconds = Int(OpenUsageISO8601.date(
-            from: "2099-02-20T14:00:00.000Z"
-        )!.timeIntervalSince1970 * 1000)
+        //
+        // The two instants are *pinned to each other* rather than to fixed hours, because spend tiles
+        // bucket by the local calendar day: any fixed pair straddles a midnight somewhere in the world,
+        // which put the row on "Yesterday" and failed this test in UTC+8 (16:00Z is local midnight) and
+        // again in negative offsets. `now` therefore lands at noon UTC, and the row is placed earlier the
+        // same local day.
+        let now = OpenUsageISO8601.date(from: "2099-02-20T12:00:00.000Z")!
+        let localHour = Calendar.current.component(.hour, from: now)
+        // `now` is never local midnight (12:00Z is midday from UTC-11 through UTC+12), so at least one
+        // hour has elapsed today and this offset always places the row between 00:00 and 23:00 local.
+        let rowInstant = now.addingTimeInterval(-Double(max(localHour - 1, 0)) * 3600)
+        let milliseconds = Int(rowInstant.timeIntervalSince1970 * 1000)
         let openCodeRows = "[[\(milliseconds),0,150,\"gpt-test\",100,0,0,50,0,\"open-code-message\"]]"
         let openCodeScanner = OpenCodeCodexUsageScanner(
             authStore: OpenCodeAuthStore(
@@ -582,8 +590,12 @@ final class CodexProviderTests: XCTestCase {
 
         let snapshot = await provider.refresh()
 
+        // Look the row up by the *local* day it was bucketed into, not a hardcoded string: the fixture's
+        // instant is chosen relative to `now`, so past UTC+12 it legitimately lands on the following local
+        // date.
         let fixtureModels = try XCTUnwrap(
-            snapshot.usageHistory?.modelUsage?.daily.first { $0.date == "2099-02-20" }?.models
+            snapshot.usageHistory?.modelUsage?.daily
+                .first { $0.date == DailyUsageAccumulator.dayKey(from: now) }?.models
         )
         let openCodeModel = try XCTUnwrap(fixtureModels.first { $0.model == "gpt-test" })
         XCTAssertEqual(openCodeModel.totalTokens, 150)

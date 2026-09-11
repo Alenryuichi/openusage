@@ -3,16 +3,31 @@ import Foundation
 /// Shared display formatters for live usage data: the mode-aware deadline/reset phrasing
 /// (`deadlineLabel`, `resetRelativeLabel`, `resetAbsoluteLabel`), compact durations, and USD currency.
 enum Formatters {
-    static func currency(_ amount: Double, fractionDigits: Int = 2) -> String {
-        let f = NumberFormatter()
-        f.numberStyle = .currency
-        f.currencyCode = "USD"
-        f.locale = Locale(identifier: "en_US")
-        f.maximumFractionDigits = fractionDigits
-        f.minimumFractionDigits = fractionDigits
-        // The fallback must also respect the requested precision: a raw "$\(amount)" would leak the
-        // double's full decimals (e.g. "$180.168"), which is exactly the rounding glitch we're fixing.
-        return f.string(from: amount as NSNumber) ?? "$\(String(format: "%.\(fractionDigits)f", amount))"
+    /// `<currency code><grouped amount>` with the code's own mark. The caller naming the currency passes
+    /// its ISO code; the mark is resolved here rather than through `NumberFormatter.currency`, which
+    /// disambiguates a foreign code in an en_US locale ("CN¥" for CNY) where the provider's own dashboard
+    /// shows a bare "¥".
+    static func currency(
+        _ amount: Double,
+        fractionDigits: Int = 2,
+        code: String = "USD",
+        symbol: String? = nil
+    ) -> String {
+        let mark = symbol ?? currencySymbol(for: code)
+        let number = amount.formatted(
+            .number.grouping(.automatic).precision(.fractionLength(fractionDigits)).locale(Locale(identifier: "en_US"))
+        )
+        return mark + number
+    }
+
+    /// The mark for a currency code. `NumberFormatter` is asked only for the symbol, so an unlisted code
+    /// still prints something sensible (its own code) instead of nothing.
+    private static func currencySymbol(for code: String) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = code
+        formatter.locale = Locale(identifier: "en_US")
+        return formatter.currencySymbol ?? code
     }
 
     /// The app's compact month/day, e.g. "Jun 21" — localized, no year. Shared so every short calendar

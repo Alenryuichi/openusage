@@ -20,9 +20,18 @@ let package = Package(
         .package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.62.0")
     ],
     targets: [
+        // Read-only zstd decoder, vendored as zstd's own amalgamated single file (see
+        // Sources/CZstd/README.md). macOS ships no zstd, and the DeepSeek provider reads DSH's compressed
+        // session event logs to get per-request timestamps.
+        .target(
+            name: "CZstd",
+            path: "Sources/CZstd",
+            publicHeadersPath: "include"
+        ),
         .target(
             name: "OpenUsage",
             dependencies: [
+                "CZstd",
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
                 .product(name: "Sparkle", package: "Sparkle"),
                 .product(name: "PostHog", package: "posthog-ios")

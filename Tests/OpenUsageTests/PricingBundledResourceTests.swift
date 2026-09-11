@@ -401,4 +401,45 @@ final class PricingBundledResourceTests: XCTestCase {
         XCTAssertEqual(pricing.resolve(model: "kimi-k2p7"), kimi)
         XCTAssertEqual(pricing.resolve(model: "kimi-k2p7-code"), kimi)
     }
+
+    // MARK: - WorkBuddy session-log slugs
+    //
+    // WorkBuddy tags each request with its own model slug, and three of them do not name a catalog model:
+    // `hy3` has a bare all-zero models.dev key, `kimi-k3-1` is Kimi K3 with WorkBuddy's version suffix,
+    // and `deepseek-v4-flash-version` is WorkBuddy's *router* tier (`requestModelId: balanced-model`)
+    // whose underlying model the log still names in the slug. Each one used to be priced at $0 or dropped
+    // from the totals entirely.
+
+    /// Tencent Hunyuan 3. models.dev carries a bare `hy3` key whose rates are all zero, so without the
+    /// supplement entry every Hunyuan request priced as free.
+    func testWorkBuddyHunyuanThreeUsesTencentRatesNotTheZeroEntry() throws {
+        let hy3 = try XCTUnwrap(Self.pricing.resolve(model: "hy3"))
+        XCTAssertEqual(hy3.inputPerMillion, 0.16)
+        XCTAssertEqual(hy3.cacheWritePerMillion, 0.16)
+        XCTAssertEqual(hy3.cacheReadPerMillion, 0.04)
+        XCTAssertEqual(hy3.outputPerMillion, 0.64)
+
+        let outputOnly = TokenBreakdown(output: 1_000_000)
+        XCTAssertEqual(Self.pricing.estimatedCostDollars(model: "hy3", tokens: outputOnly)!, 0.64, accuracy: 1e-9)
+    }
+
+    /// `kimi-k3-1` carries Kimi K3's `requestModelName`; the `-1` is WorkBuddy's version suffix, not an
+    /// effort level, so it is its own alias rather than another `canonicalName` alternative.
+    func testWorkBuddyVersionedKimiSlugPricesAsKimiK3() throws {
+        let k3 = try XCTUnwrap(Self.pricing.resolve(model: "kimi-k3"))
+        XCTAssertEqual(Self.pricing.supplement.canonicalName(for: "kimi-k3-1"), "kimi-k3")
+        XCTAssertEqual(Self.pricing.resolve(model: "kimi-k3-1"), k3)
+        // The version suffix must not loosen the effort allowlist: an unknown suffix stays unpriced.
+        XCTAssertNil(Self.pricing.resolve(model: "kimi-k3-2"))
+    }
+
+    /// WorkBuddy's router tier logs the routed model in its slug alongside the router's own id, so the
+    /// slug prices as that model instead of raising the unknown-model warning.
+    func testWorkBuddyRouterSlugPricesAsTheModelItNames() throws {
+        let flash = try XCTUnwrap(Self.pricing.resolve(model: "deepseek-v4-flash"))
+        XCTAssertEqual(Self.pricing.supplement.canonicalName(for: "deepseek-v4-flash-version"), "deepseek-v4-flash")
+        XCTAssertEqual(Self.pricing.resolve(model: "deepseek-v4-flash-version"), flash)
+        // A near-miss must not be swept up by the alias.
+        XCTAssertNil(Self.pricing.supplement.canonicalName(for: "deepseek-v4-pro-version"))
+    }
 }

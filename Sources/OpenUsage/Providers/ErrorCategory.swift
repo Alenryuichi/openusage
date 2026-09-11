@@ -236,6 +236,48 @@ extension ZAIAuthError: CategorizedError {
     }
 }
 
+extension ZcodeUsageError: CategorizedError {
+    var errorCategory: ErrorCategory {
+        switch self {
+        // No local footprint at all — Zcode was never run here, the expected "nothing to track" case.
+        case .notInstalled: .notLoggedIn
+        case .databaseUnreadable: .credentialAccess
+        }
+    }
+}
+
+extension WorkBuddyUsageError: CategorizedError {
+    var errorCategory: ErrorCategory {
+        switch self {
+        // No transcripts at all — WorkBuddy was never run here, the expected "nothing to track" case.
+        case .notInstalled: .notLoggedIn
+        case .logsUnreadable: .credentialAccess
+        }
+    }
+}
+
+extension DeepSeekAuthError: CategorizedError {
+    var errorCategory: ErrorCategory {
+        switch self {
+        case .missingKey: .notLoggedIn
+        case .invalidKey: .authInvalid
+        case .saveFailed, .deleteFailed: .other
+        }
+    }
+}
+
+extension DeepSeekUsageError: CategorizedError {
+    var errorCategory: ErrorCategory {
+        switch self {
+        case .connectionFailed: .network
+        case .invalidResponse, .noBalance: .decoding
+        case .requestFailed(let status): ErrorCategory.http(status)
+        case .invalidKey: .authInvalid
+        case .logsUnreadable: .credentialAccess
+        }
+    }
+}
+
 extension ZAIUsageError: CategorizedError {
     var errorCategory: ErrorCategory {
         switch self {

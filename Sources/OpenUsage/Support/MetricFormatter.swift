@@ -22,7 +22,11 @@ enum MetricFormatter {
     private static let locale = Locale(identifier: "en_US")
 
     /// A bare number in the given kind and style (no unit label).
-    static func number(_ value: Double, kind: MetricKind, style: Style) -> String {
+    ///
+    /// `currencySymbol` only affects `.dollars`: it defaults to `$` (every spend row in the app is
+    /// USD-denominated), and a provider whose balance is held in another currency — DeepSeek bills CNY
+    /// accounts in yuan — passes its own mark so the figure keeps cents without claiming to be dollars.
+    static func number(_ value: Double, kind: MetricKind, style: Style, currencySymbol: String = "$") -> String {
         switch kind {
         case .percent:
             // Percent is a bounded 0...100 domain, so clamp defensively: a bad sample (a provider
@@ -34,15 +38,20 @@ enum MetricFormatter {
             // Tray and row abbreviate four figures and up ("$1.2M", "$2.1K") so neither carries
             // "$2,059.07"; the full form (tooltips/headlines) always keeps grouped cents.
             if abs(value) >= 1000, style != .full {
-                return "$" + value.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale))
+                return currencySymbol + value.formatted(
+                    .number.notation(.compactName).precision(.fractionLength(0...1)).locale(locale)
+                )
             }
             switch style {
             case .tray:
-                // Shortest below $1k: whole dollars ("$130").
-                return "$" + value.formatted(.number.precision(.fractionLength(0)).locale(locale))
+                // Shortest below 1k: whole units ("$130").
+                return currencySymbol + value.formatted(.number.precision(.fractionLength(0)).locale(locale))
             case .row, .full:
-                // Full cents below $1k; the row's token-count neighbor stays readable.
-                return Formatters.currency(value, fractionDigits: 2)
+                // Full cents below 1k; the row's token-count neighbor stays readable.
+                return Formatters.currency(
+                    value, fractionDigits: 2,
+                    code: currencyCode(for: currencySymbol), symbol: currencySymbol
+                )
             }
         case .count:
             // Tray and row abbreviate at the thousands (token counts run into the billions); the full
@@ -55,10 +64,29 @@ enum MetricFormatter {
         }
     }
 
+    /// A bare number for one already-typed value, honoring the currency it is held in. Every call site
+    /// that has a `MetricValue` in hand should use this rather than the `kind`-only overload, or a
+    /// non-USD balance would silently print with a `$`.
+    static func number(_ value: MetricValue, style: Style) -> String {
+        number(value.number, kind: value.kind, style: style, currencySymbol: value.currencySymbol ?? "$")
+    }
+
+    /// The ISO code `Formatters.currency` needs to print `symbol` in the en_US locale. Only the marks a
+    /// provider can actually send are listed; anything else keeps USD's `$` rather than inventing one.
+    private static func currencyCode(for symbol: String) -> String {
+        switch symbol {
+        case "¥": return "CNY"
+        case "€": return "EUR"
+        case "£": return "GBP"
+        default: return "USD"
+        }
+    }
+
     /// A value with its unit label appended, e.g. "772 credits". Token, dollar, and percent values
-    /// carry no label and render bare ("56.9M", "$4.08", "95%") — those rows show no unit, by design.
+    /// carry no label and render bare ("56.9M", "$4.08", "¥70.65", "95%") — those rows show no unit,
+    /// by design.
     static func string(for value: MetricValue, style: Style) -> String {
-        let text = number(value.number, kind: value.kind, style: style)
+        let text = number(value, style: style)
         guard let label = value.label, !label.isEmpty else { return text }
         return "\(text) \(label)"
     }

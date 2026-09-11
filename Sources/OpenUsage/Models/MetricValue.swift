@@ -19,12 +19,17 @@ struct MetricValue: Hashable, Sendable, Codable {
     /// True when the number is imputed locally rather than measured or billed — it drives the ⓘ note.
     /// Per value because a spend row's dollars are an estimate while its token count is real.
     var estimated: Bool
+    /// The mark to print instead of `$` on a `.dollars` value held in another currency — DeepSeek bills
+    /// CNY accounts in yuan, so a "¥70.65" balance must not read as "$70.65". `nil` (the default) means
+    /// the app's USD formatting, which is what every spend estimate uses.
+    var currencySymbol: String?
 
-    init(number: Double, kind: MetricKind, label: String? = nil, estimated: Bool = false) {
+    init(number: Double, kind: MetricKind, label: String? = nil, estimated: Bool = false, currencySymbol: String? = nil) {
         self.number = number
         self.kind = kind
         self.label = label
         self.estimated = estimated
+        self.currencySymbol = currencySymbol
     }
 }
 
